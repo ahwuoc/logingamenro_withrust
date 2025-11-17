@@ -1,7 +1,7 @@
 use super::message::Message;
 use super::service::Service;
 use super::session::Session;
-use crate::command::Command;
+use crate::command::command;
 use crate::config::Config;
 use crate::db::DbManager;
 use crate::model::user::User;
@@ -25,9 +25,9 @@ impl Controller {
     }
     pub async fn process(&self, session: &mut Session, msg: Message) -> Result<()> {
         match msg.command {
-            Command::LOGIN => self.login(session, msg).await?,
-            Command::LOGOUT => self.logout(session, msg).await?,
-            Command::SET_SERVER => self.set_server(session, msg).await?,
+            command::LOGIN => self.login(session, msg).await?,
+            command::LOGOUT => self.logout(session, msg).await?,
+            command::SET_SERVER => self.set_server(session, msg).await?,
             _ => println!("Unknown command: {}", msg.command),
         }
         Ok(())
@@ -75,7 +75,7 @@ impl Controller {
                     return Ok(());
                 }
 
-                // Check 4: Testmode (chỉ admin mới login được)
+                // Check 4: Testmode
                 if !user.is_admin && self.config.server.testmode == 1 {
                     Service::login_failed(
                         session,

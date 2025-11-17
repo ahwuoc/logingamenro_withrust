@@ -1,4 +1,4 @@
-pub mod Command {
+pub mod command {
     pub const LOGIN: i8 = 1;
     pub const LOGOUT: i8 = 2;
     pub const DISCONNECT: i8 = 3;

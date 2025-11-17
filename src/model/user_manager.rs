@@ -60,10 +60,4 @@ impl UserManager {
         let users = self.users.read().await;
         users.contains_key(&user_id)
     }
-
-    /// Đếm số users online
-    pub async fn count(&self) -> usize {
-        let users = self.users.read().await;
-        users.len()
-    }
 }

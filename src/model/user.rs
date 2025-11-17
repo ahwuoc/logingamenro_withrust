@@ -4,8 +4,6 @@ use sqlx::FromRow;
 #[derive(Debug, FromRow)]
 pub struct User {
     pub id: i32,
-    pub username: String,
-    pub password: String,
     pub is_admin: bool,
     pub active: bool,
     pub thoi_vang: i32,
@@ -47,18 +45,6 @@ impl User {
         user_id: i32,
     ) -> Result<(), sqlx::Error> {
         sqlx::query("UPDATE account SET last_time_login = NOW() WHERE id = ?")
-            .bind(user_id)
-            .execute(pool)
-            .await?;
-        Ok(())
-    }
-    pub async fn update_server(
-        pool: &sqlx::MySqlPool,
-        user_id: i32,
-        server_id: i32,
-    ) -> Result<(), sqlx::Error> {
-        sqlx::query("UPDATE account SET server_login =  ? where id = ?")
-            .bind(server_id)
             .bind(user_id)
             .execute(pool)
             .await?;

@@ -61,15 +61,8 @@ impl Session {
             for i in 1..self.key.len() {
                 msg.write_byte((self.key[i] ^ self.key[i - 1]) as i8);
             }
-
-            println!(
-                "Sending encryption key: len={}, key={:?}",
-                self.key.len(),
-                self.key
-            );
             self.do_send_message(&msg).await?;
             self.send_key_complete.store(true, Ordering::Relaxed);
-            println!("Encryption key sent successfully");
         }
         Ok(())
     }
@@ -123,35 +116,21 @@ impl Session {
     pub async fn read_message(&mut self) -> Result<Option<Message>> {
         let is_encrypted = self.send_key_complete.load(Ordering::Relaxed);
 
-        // STEP 1: Read ALL raw bytes from stream FIRST
         let (raw_cmd, raw_size_bytes, size, raw_data) = {
             let mut stream = self.stream.lock().await;
 
-            println!("DEBUG: Waiting for message... (encrypted={})", is_encrypted);
             let cmd = stream.read_u8().await?;
-            println!("DEBUG: Received cmd byte: {}", cmd as i8);
 
             let (size_b1, size_b2, raw_size) = if is_encrypted {
-                println!("DEBUG: Reading encrypted size...");
                 let b1 = stream.read_u8().await?;
                 let b2 = stream.read_u8().await?;
-                println!("DEBUG: Raw size bytes: b1={}, b2={}", b1, b2);
-                (b1, b2, 0) // Will calculate actual size after decryption
+                (b1, b2, 0)
             } else {
                 let sz = stream.read_u16().await? as usize;
-                println!("DEBUG: Unencrypted size: {}", sz);
                 (0, 0, sz)
             };
 
-            // For encrypted messages, we need to decrypt size bytes first
-            // So we'll read a reasonable buffer and adjust later
-            // Java reads data incrementally, but we need the decrypted size first
-            // Let's read size bytes separately to decrypt them
-            
-            // Temporary: just read the decrypted size separately
             let data = if is_encrypted {
-                // We need to buffer read since we don't know size yet
-                // Read enough to handle the message (will truncate after decrypt)
                 vec![]
             } else {
                 let mut buf = vec![0u8; raw_size];
@@ -162,10 +141,8 @@ impl Session {
             (cmd, (size_b1, size_b2), raw_size, data)
         }; // stream guard dropped here
 
-        // STEP 2: NOW decrypt everything
         let cmd = if is_encrypted {
             let decrypted = self.read_key(raw_cmd);
-            println!("DEBUG: Decrypted cmd: {} -> {}", raw_cmd, decrypted as i8);
             decrypted
         } else {
             raw_cmd
@@ -177,21 +154,23 @@ impl Session {
             let b1 = self.read_key(raw_size_bytes.0);
             let b2 = self.read_key(raw_size_bytes.1);
             let actual_size = ((b1 as usize) << 8) | (b2 as usize);
-            println!("DEBUG: Decrypted size: {} -> {}", 
-                ((raw_size_bytes.0 as usize) << 8) | (raw_size_bytes.1 as usize), 
-                actual_size);
-            
+            println!(
+                "DEBUG: Decrypted size: {} -> {}",
+                ((raw_size_bytes.0 as usize) << 8) | (raw_size_bytes.1 as usize),
+                actual_size
+            );
+
             // Now read the actual data with correct size
             let mut stream = self.stream.lock().await;
             let mut buf = vec![0u8; actual_size];
             stream.read_exact(&mut buf).await?;
             drop(stream);
-            
+
             // Decrypt data
             for byte in buf.iter_mut() {
                 *byte = self.read_key(*byte);
             }
-            
+
             buf
         } else {
             raw_data
