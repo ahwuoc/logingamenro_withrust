@@ -1,6 +1,6 @@
 use anyhow::Result;
 use tokio::net::TcpListener;
-use tracing::{error, info};
+use tracing::{debug, error, info, trace};
 
 mod command;
 mod config;
@@ -16,23 +16,38 @@ use model::user_manager::UserManager;
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    // init logging
     tracing_subscriber::fmt::init();
 
-    // Load config
-    let config = Config::load("config/server.toml")?;
+    let config = Config::load("config.toml")?;
     info!("Configuration loaded");
-
+    debug!("Config: {:#?}", config);
+    trace!("Server listen_port: {}", config.server.listen_port);
+    trace!("Server second_wait_login: {}", config.server.second_wait_login);
+    trace!("Server testmode: {}", config.server.testmode);
+    
+    println!("Server Port: {}, Test Mode: {}, Wait Login: {}s", 
+        config.server.listen_port,
+        config.server.testmode,
+        config.server.second_wait_login
+    );
+    
+    println!("Database: {}:{}/{} (user: {}, pool: {}-{})",
+        config.database.host,
+        config.database.port,
+        config.database.database_name,
+        config.database.username,
+        config.database.min_connections,
+        config.database.max_connections
+    );
     let db = DbManager::new(&config.database).await?;
     info!("Database connected");
 
-    // Tạo UserManager để track users online
     let user_manager = UserManager::new();
 
     let addr = format!("0.0.0.0:{}", config.server.listen_port);
     let listener = TcpListener::bind(&addr).await?;
     info!("Listening on port: {}", config.server.listen_port);
-
+    println!("@Author dev:Ahwuocdz");
     let mut session_id = 0;
     loop {
         match listener.accept().await {
@@ -77,14 +92,11 @@ async fn handle_session(
     while session.is_connected() {
         match session.read_message().await {
             Ok(Some(msg)) => {
-                // Check if this is a key request from Game Server
                 if msg.command == -27 {
                     info!("Game Server requested encryption key");
                     session.send_key().await?;
                     continue;
                 }
-
-                // Process other commands
                 controller.process(&mut session, msg).await?;
             }
             Ok(None) => {
@@ -99,6 +111,5 @@ async fn handle_session(
     }
     session.close();
     info!("Session {} disconnected", id);
-
     Ok(())
 }
